@@ -3,3 +3,4 @@
 *.pdf
 *.eps
 *.m
+__pycache__/
