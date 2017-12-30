@@ -144,7 +144,7 @@ def homo_vars(samples, plot=False, labels = None, bins=15, test = None, **kwds):
                              proportiontocut = proportiontocut)
     else:
         return
-    
+    print('========   TEST OF EQUAL VARIANCE   =======')
     print('%s test statistics T: %8.5f and P-vale %10.8f' % (test,T, pvalue))
     if pvalue<0.05:
         print('Reject null hypothesis at 95% confidence')
@@ -152,6 +152,78 @@ def homo_vars(samples, plot=False, labels = None, bins=15, test = None, **kwds):
         print('Fail to reject null hypothesis at 95% confidence')
     return T, pvalue
 
+
+def cochran_CUL(n, k, alpha):
+    """
+    helper function calculates upper limit critical value of
+    test statistic of Cochran's C test
+    
+    args:
+        n: number of data points per group
+        k: number of groups
+        alpha: significance level
+    return:
+        Tc: critical value of test statistic
+    reference: https://en.wikipedia.org/wiki/Cochran's_C_test
+    """
+    Fc = scipy.stats.f.ppf(1-alpha/k, n-1, (n-1)*(k-1))
+    return 1/(1 + (k-1)/Fc)
+
+def cochranC(*args, alpha=0.05, plot=False, labels=None):
+    """
+    Cochran's C test for detecting outlier variance that is significantly
+    larger than variances in other groups (an upper limit outlier test)
+    Cochran's tests assumes balanced design, which means the size of samples
+    in different groups must be equal.
+    
+    args:
+        sample1, sample2, ....
+        alpha: significance level, default=0.05
+    
+    return: 
+        T: test statistic
+        Tc: critical test statistic at confidence level specified by alpha
+    """
+    samples = np.vstack(args).T
+    n, k    = samples.shape
+    ss      = samples.var(ddof = 1, axis=0)
+    T       = ss.max()/ss.sum()
+    Tc      = cochran_CUL(n, k, alpha)
+    
+    print("=========  Cochran's C test  =========")
+    print('# data per group  : %d'%(n))
+    print('# of groups       : %d'%(k))
+    print('Largest variance  : %f'%(ss.max()))
+    print('Sum of variances  : %f'%(ss.sum()))
+    print('Mean variance     : %f'%(ss.mean()))
+    print('Significance level: %5.3f'%(alpha))
+    print('Test statistic    : %f' %(T))
+    print('Critical value    : %f' %(Tc))
+    if T>Tc:
+        print('Diagnostic: reject null')
+    else:
+        print('Diagnostic: fail to reject null')
+    
+    # make box plot.
+    if not plot:
+        return T, Tc
+    
+    # box plots.
+    if not labels:
+        labels = ['X%d'%(i) for i in range(k)] 
+    if plot:
+        plt.figure(figsize=(12,6))
+        plt.subplot(1,2,1)
+        plt.boxplot(args, positions=list(range(k)), labels=labels, widths=0.5)
+        
+        # plot a barplots of variances of different groups.
+        plt.subplot(1,2,2)
+        plt.bar(range(k), ss, color='red',
+                alpha=0.8, align='center',tick_label=labels)
+        plt.plot([-0.5, k-0.5], [np.mean(ss), np.mean(ss)], 'k--')
+    
+    return T, Tc
+    
 class PermTest():
     """
     A class that perform permutation test
@@ -166,7 +238,7 @@ class PermTest():
         self.T            = stat_fun(samples)
         self.distribution = None
         self.pvalue       = None
-    def test(self, size = 1000):
+    def test(self, size = 1000, plot=False, bins=15):
         X = np.concatenate(self.samples)
         dims = list(map(len,self.samples))
         self.distribution = np.zeros((size,))
@@ -175,11 +247,19 @@ class PermTest():
             Ys = np.split(Y, np.cumsum(dims)[:-1])
             self.distribution[i] = self.stat_fun(Ys)
         self.pvalue    = np.mean(self.distribution>self.T)
+        print('=============   Permutation Test   ============')
         print('%s test statistics T: %8.5f and P-vale %10.8f'
               % ('Permutation',self.T, self.pvalue))
         if self.pvalue<0.05:
             print('Reject null hypothesis at 95% confidence')
         else:
             print('Fail to reject null hypothesis at 95% confidence')
+        
+        # plot histogram
+        if plot:
+            plt.figure()
+            plt.hist(self.distribution, alpha=0.8, bins = bins)
+            
+            
     
     
